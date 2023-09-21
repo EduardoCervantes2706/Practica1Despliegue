@@ -1,0 +1,69 @@
+---
+- name: Configuración de Servidor Web
+  hosts: all
+  become: yes
+  tasks:
+    - name: Actualizar lista de paquetes
+      apt:
+        update_cache: yes
+      become: yes
+    - name: Instalar Apache2
+      apt:
+        name: apache2
+        state: present
+    - name: Instalar MySQL
+      apt:
+        name: mysql-server
+        state: present
+    - name: Instalar PHP y sus paquetes
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - php
+        - libapache2-mod-php
+        - php-mysql
+    - name: Mandar archivos PHP
+      copy:
+        src: /etc/ansible/Practica1Despliegue/
+        dest: /var/www/html/ECervantes.com/
+      tags: [web]
+    - name: Crear el VirtualHost de la aplicacion Web
+      copy:
+        src: /etc/ansible/ECervantes.com.conf
+        dest: /etc/apache2/sites-available/
+    - name: Habilitar el VirtualHost con nuestro dominio
+      command: a2ensite ECervantes.com.conf
+      become: yes
+    - name: Crear usuario y contraseña en MySQL
+      mysql_user:
+        name: luiseduardocj
+        password: 27062000
+        priv: '*.*:ALL'
+        host: localhost
+        state: present
+      become: yes
+    - name: Cargar esquema de bases de datos
+      mysql_db:
+        name: CRUD_Despliegue
+        state: import
+        target: /var/www/html/ECervantes.com/esquema.sql
+      become: yes
+    - name: Eliminar cuentas anónimas y base de datos de prueba
+      mysql_db:
+        name: "{{ item }}"
+        state: absent
+      with_items:
+        - test
+        - mysql.session
+        - mysql.sys
+    - name: Configurar el firewall para permitir tráfico HTTP
+      ufw:
+        rule: allow
+        port: 80
+        proto: tcp
+    - name: Reiniciar el servicio de Apache
+      service:
+        name: apache2
+        state: restarted
+      become: yes
